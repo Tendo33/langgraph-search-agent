@@ -20,7 +20,7 @@ def get_research_topic(messages: List[AnyMessage]) -> str:
 
 def resolve_urls(urls_to_resolve: List[Any], id: int) -> Dict[str, str]:
     """Create a map of the vertex ai search urls (very long) to a short url with a unique id for each url.
-    
+
     Ensures each original URL gets a consistent shortened form while maintaining uniqueness.
 
     Args:
@@ -29,7 +29,7 @@ def resolve_urls(urls_to_resolve: List[Any], id: int) -> Dict[str, str]:
 
     Returns:
         Dict[str, str]: A dictionary mapping each original URL to its resolved short URL.
-    
+
     """
     prefix = "https://vertexaisearch.cloud.google.com/id/"
     urls = [site.web.uri for site in urls_to_resolve]

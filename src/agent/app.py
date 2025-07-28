@@ -27,6 +27,7 @@ def create_frontend_router(build_dir="../frontend/dist"):
 
     if not build_path.is_dir() or not (build_path / "index.html").is_file():
         import logging
+
         logging.warning(
             f"Frontend build directory not found or incomplete at {build_path}. Serving frontend will likely fail."
         )

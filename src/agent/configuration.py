@@ -1,3 +1,8 @@
+"""Configuration module for the agent.
+
+Defines the Configuration class for managing agent settings such as model names and loop counts.
+"""
+
 import os
 from typing import Any
 
@@ -15,7 +20,7 @@ class Configuration(BaseModel):
 
     reflection_model: str = Field(
         default="gemini-2.5-flash",
-        description="The name of the language model to use for the agent's reflection."
+        description="The name of the language model to use for the agent's reflection.",
     )
 
     answer_model: str = Field(
@@ -34,9 +39,13 @@ class Configuration(BaseModel):
     )
 
     @classmethod
-    def from_runnable_config(cls, config: RunnableConfig | None = None) -> "Configuration":
+    def from_runnable_config(
+        cls, config: RunnableConfig | None = None
+    ) -> "Configuration":
         """Create a Configuration instance from a RunnableConfig."""
-        configurable = config["configurable"] if config and "configurable" in config else {}
+        configurable = (
+            config["configurable"] if config and "configurable" in config else {}
+        )
 
         # Get raw values from environment or config
         raw_values: dict[str, Any] = {

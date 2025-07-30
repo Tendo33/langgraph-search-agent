@@ -82,7 +82,7 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
         number_queries=state["initial_search_query_count"],
     )
     # Generate the search queries
-    result = structured_llm.invoke(formatted_prompt)
+    result: SearchQueryList = structured_llm.invoke(formatted_prompt)
     return {"search_query": result.query}
 
 
@@ -174,7 +174,7 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    result = llm.with_structured_output(Reflection).invoke(formatted_prompt)
+    result: Reflection = llm.with_structured_output(Reflection).invoke(formatted_prompt)
 
     return {
         "is_sufficient": result.is_sufficient,
@@ -253,7 +253,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    result = llm.invoke(formatted_prompt)
+    result: AIMessage = llm.invoke(formatted_prompt)
 
     # Replace the short urls with the original urls and add all used urls to the sources_gathered
     unique_sources = []

@@ -1,6 +1,10 @@
 import argparse
-from langchain_core.messages import HumanMessage
+from typing import List
+
+from langchain_core.messages import AnyMessage, HumanMessage
+
 from agent.graph import graph
+from agent.state import OverallState
 
 
 def main() -> None:
@@ -24,7 +28,7 @@ def main() -> None:
         default="gemini-2.5-pro-preview-05-06",
         help="Model for the final answer",
     )
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
 
     state = {
         "messages": [HumanMessage(content=args.question)],
@@ -33,8 +37,8 @@ def main() -> None:
         "reasoning_model": args.reasoning_model,
     }
 
-    result = graph.invoke(state)
-    messages = result.get("messages", [])
+    result: OverallState = graph.invoke(state)
+    messages: List[AnyMessage] = result.get("messages", [])
     if messages:
         print(messages[-1].content)
 

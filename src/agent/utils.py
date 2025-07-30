@@ -1,3 +1,5 @@
+"""Utility functions for the LangGraph search agent."""
+
 from typing import Any, Dict, List
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage

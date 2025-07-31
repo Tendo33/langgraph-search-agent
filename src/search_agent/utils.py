@@ -1,8 +1,33 @@
 """Utility functions for the LangGraph search agent."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TypedDict
 
+from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+
+
+class CitationSegment(TypedDict):
+    """Type definition for citation segment."""
+
+    label: str
+    short_url: str
+    value: str
+
+
+class Citation(TypedDict):
+    """Type definition for citation."""
+
+    start_index: int
+    end_index: int
+    segments: List[CitationSegment]
+
+
+class SourceSegment(TypedDict):
+    """Type definition for source segment."""
+
+    label: str
+    short_url: str
+    value: str
 
 
 def get_research_topic(messages: List[AnyMessage]) -> str:
@@ -45,14 +70,13 @@ def resolve_urls(urls_to_resolve: List[Any], id: int) -> Dict[str, str]:
     return resolved_map
 
 
-def insert_citation_markers(text, citations_list):
+def insert_citation_markers(text: str, citations_list: List[Citation]) -> str:
     """Insert citation markers into a text string based on start and end indices.
 
     Args:
         text (str): The original text string.
-        citations_list (list): A list of dictionaries, where each dictionary
-        contains 'start_index', 'end_index', and
-        'segment_string' (the marker to insert).
+        citations_list (List[Citation]): A list of citation dictionaries, where each dictionary
+        contains 'start_index', 'end_index', and 'segments' (the citation segments).
         Indices are assumed to be for the original text.
 
     Returns:
@@ -83,7 +107,9 @@ def insert_citation_markers(text, citations_list):
     return modified_text
 
 
-def get_citations(response, resolved_urls_map):
+def get_citations(
+    response: GenerateContentResponse, resolved_urls_map: Dict[str, str]
+) -> List[Citation]:
     """Extract and formats citation information from a Gemini model's response.
 
     This function processes the grounding metadata provided in the response to
@@ -92,27 +118,23 @@ def get_citations(response, resolved_urls_map):
     containing formatted markdown links to the supporting web chunks.
 
     Args:
-        response: The response object from the Gemini model, expected to have
+        response (GenerateContentResponse): The response object from the Gemini model, expected to have
                   a structure including `candidates[0].grounding_metadata`.
-                  It also relies on a `resolved_map` being available in its
-                  scope to map chunk URIs to resolved URLs.
+        resolved_urls_map (Dict[str, str]): A mapping of chunk URIs to resolved URLs.
 
     Returns:
-        list: A list of dictionaries, where each dictionary represents a citation
+        List[Citation]: A list of citation dictionaries, where each dictionary represents a citation
             and has the following keys:
             - "start_index" (int): The starting character index of the cited
                                 segment in the original text. Defaults to 0
                                 if not specified.
             - "end_index" (int): The character index immediately after the
                                 end of the cited segment (exclusive).
-            - "segments" (list[str]): A list of individual markdown-formatted
-                                    links for each grounding chunk.
-            - "segment_string" (str): A concatenated string of all markdown-
-                                    formatted links for the citation.
+            - "segments" (List[CitationSegment]): A list of individual citation segments.
             Returns an empty list if no valid candidates or grounding supports
             are found, or if essential data is missing.
     """
-    citations = []
+    citations: List[Citation] = []
 
     # Ensure response and necessary nested structures are present
     if not response or not response.candidates:
@@ -127,7 +149,7 @@ def get_citations(response, resolved_urls_map):
         return citations
 
     for support in candidate.grounding_metadata.grounding_supports:
-        citation = {}
+        citation: Citation = {}
 
         # Ensure segment information is present
         if not hasattr(support, "segment") or support.segment is None:

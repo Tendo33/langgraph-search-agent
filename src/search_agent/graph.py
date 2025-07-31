@@ -5,9 +5,11 @@ performs web research, reflects on results, and finalizes answers using Gemini m
 """
 
 import os
+from typing import Dict, List, Union
 
 from dotenv import load_dotenv
 from google.genai import Client
+from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -30,6 +32,7 @@ from search_agent.state import (
 )
 from search_agent.tools_and_schemas import Reflection, SearchQueryList
 from search_agent.utils import (
+    Citation,
     get_citations,
     get_research_topic,
     insert_citation_markers,
@@ -42,7 +45,7 @@ if os.getenv("GEMINI_API_KEY") is None:
     raise ValueError("GEMINI_API_KEY is not set")
 
 # Used for Google Search API
-genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
+genai_client: Client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # Nodes
@@ -59,14 +62,14 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     Returns:
         Dictionary with state update, including search_query key containing the generated queries
     """
-    configurable = Configuration.from_runnable_config(config)
+    configurable: Configuration = Configuration.from_runnable_config(config)
 
     # check for custom initial search query count
     if state.get("initial_search_query_count") is None:
         state["initial_search_query_count"] = configurable.number_of_initial_queries
 
     # init Gemini 2.0 Flash
-    llm = ChatGoogleGenerativeAI(
+    llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
         model=configurable.query_generator_model,
         temperature=1.0,
         max_retries=2,
@@ -75,8 +78,8 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     structured_llm = llm.with_structured_output(SearchQueryList)
 
     # Format the prompt
-    current_date = get_current_date()
-    formatted_prompt = get_query_writer_instructions(
+    current_date: str = get_current_date()
+    formatted_prompt: str = get_query_writer_instructions(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
         number_queries=state["initial_search_query_count"],
@@ -86,7 +89,7 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     return {"search_query": result.query}
 
 
-def continue_to_web_research(state: QueryGenerationState):
+def continue_to_web_research(state: QueryGenerationState) -> List[Send]:
     """LangGraph node that sends the search queries to the web research node.
 
     This is used to spawn n number of web research nodes, one for each search query.
@@ -110,14 +113,14 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         Dictionary with state update, including sources_gathered, research_loop_count, and web_research_results
     """
     # Configure
-    configurable = Configuration.from_runnable_config(config)
-    formatted_prompt = get_web_searcher_instructions(
+    configurable: Configuration = Configuration.from_runnable_config(config)
+    formatted_prompt: str = get_web_searcher_instructions(
         current_date=get_current_date(),
         research_topic=state["search_query"],
     )
 
     # Uses the google genai client as the langchain client doesn't return grounding metadata
-    response = genai_client.models.generate_content(
+    response: GenerateContentResponse = genai_client.models.generate_content(
         model=configurable.query_generator_model,
         contents=formatted_prompt,
         config={
@@ -126,13 +129,15 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         },
     )
     # resolve the urls to short urls for saving tokens and time
-    resolved_urls = resolve_urls(
+    resolved_urls: Dict[str, str] = resolve_urls(
         response.candidates[0].grounding_metadata.grounding_chunks, state["id"]
     )
     # Gets the citations and adds them to the generated text
-    citations = get_citations(response, resolved_urls)
-    modified_text = insert_citation_markers(response.text, citations)
-    sources_gathered = [item for citation in citations for item in citation["segments"]]
+    citations: List[Citation] = get_citations(response, resolved_urls)
+    modified_text: str = insert_citation_markers(response.text, citations)
+    sources_gathered: List[Dict[str, str]] = [
+        item for citation in citations for item in citation["segments"]
+    ]
 
     return {
         "sources_gathered": sources_gathered,
@@ -155,19 +160,19 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     Returns:
         Dictionary with state update, including search_query key containing the generated follow-up query
     """
-    configurable = Configuration.from_runnable_config(config)
+    configurable: Configuration = Configuration.from_runnable_config(config)
     # Increment the research loop count and get the reasoning model
     state["research_loop_count"] = state.get("research_loop_count", 0) + 1
-    reasoning_model = state.get("reasoning_model", configurable.reflection_model)
+    reasoning_model: str = state.get("reasoning_model", configurable.reflection_model)
 
     # Format the prompt
     # current_date = get_current_date()
-    formatted_prompt = get_reflection_instructions(
+    formatted_prompt: str = get_reflection_instructions(
         research_topic=get_research_topic(state["messages"]),
         summaries="\n\n---\n\n".join(state["web_research_result"]),
     )
     # init Reasoning Model
-    llm = ChatGoogleGenerativeAI(
+    llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
         model=reasoning_model,
         temperature=1.0,
         max_retries=2,
@@ -187,7 +192,7 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
 def evaluate_research(
     state: ReflectionState,
     config: RunnableConfig,
-) -> OverallState:
+) -> Union[str, List[Send]]:
     """LangGraph routing function that determines the next step in the research flow.
 
     Controls the research loop by deciding whether to continue gathering information
@@ -200,8 +205,8 @@ def evaluate_research(
     Returns:
         String literal indicating the next node to visit ("web_research" or "finalize_summary")
     """
-    configurable = Configuration.from_runnable_config(config)
-    max_research_loops = (
+    configurable: Configuration = Configuration.from_runnable_config(config)
+    max_research_loops: int = (
         state.get("max_research_loops")
         if state.get("max_research_loops") is not None
         else configurable.max_research_loops
@@ -221,7 +226,7 @@ def evaluate_research(
         ]
 
 
-def finalize_answer(state: OverallState, config: RunnableConfig):
+def finalize_answer(state: OverallState, config: RunnableConfig) -> OverallState:
     """LangGraph node that finalizes the research summary.
 
     Prepares the final output by deduplicating and formatting sources, then
@@ -234,19 +239,19 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
     Returns:
         Dictionary with state update, including running_summary key containing the formatted final summary with sources
     """
-    configurable = Configuration.from_runnable_config(config)
-    reasoning_model = state.get("reasoning_model") or configurable.answer_model
+    configurable: Configuration = Configuration.from_runnable_config(config)
+    reasoning_model: str = state.get("reasoning_model") or configurable.answer_model
 
     # Format the prompt
-    current_date = get_current_date()
-    formatted_prompt = get_answer_instructions(
+    current_date: str = get_current_date()
+    formatted_prompt: str = get_answer_instructions(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
         summaries="\n---\n\n".join(state["web_research_result"]),
     )
 
     # init Reasoning Model, default to Gemini 2.5 Flash
-    llm = ChatGoogleGenerativeAI(
+    llm: ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
         model=reasoning_model,
         temperature=0,
         max_retries=2,
@@ -255,7 +260,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
     result: AIMessage = llm.invoke(formatted_prompt)
 
     # Replace the short urls with the original urls and add all used urls to the sources_gathered
-    unique_sources = []
+    unique_sources: List[Dict[str, str]] = []
     for source in state["sources_gathered"]:
         if source["short_url"] in result.content:
             result.content = result.content.replace(
@@ -270,7 +275,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
 
 
 # Create our Agent Graph
-builder = StateGraph(OverallState, config_schema=Configuration)
+builder: StateGraph = StateGraph(OverallState, config_schema=Configuration)
 
 # Define the nodes we will cycle between
 builder.add_node("generate_query", generate_query)

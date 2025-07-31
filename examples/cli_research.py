@@ -10,7 +10,7 @@ Options:
 """
 
 import argparse
-from typing import List
+from typing import Any, Dict, List
 
 from langchain_core.messages import AnyMessage, HumanMessage
 
@@ -20,7 +20,9 @@ from search_agent.state import OverallState
 
 def main() -> None:
     """Run the research agent from the command line."""
-    parser = argparse.ArgumentParser(description="Run the LangGraph research agent")
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description="Run the LangGraph research agent"
+    )
     parser.add_argument("question", help="Research question")
     parser.add_argument(
         "--initial-queries",
@@ -41,7 +43,7 @@ def main() -> None:
     )
     args: argparse.Namespace = parser.parse_args()
 
-    state = {
+    state: Dict[str, Any] = {
         "messages": [HumanMessage(content=args.question)],
         "initial_search_query_count": args.initial_queries,
         "max_research_loops": args.max_loops,

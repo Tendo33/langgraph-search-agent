@@ -5,20 +5,21 @@ LangGraph research agent.
 """
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from search_agent.graph import create_graph
+from search_agent.graph import graph
 from search_agent.state import OverallState
 
 load_dotenv()
 
 # Define the FastAPI app
-app = FastAPI(
+app: FastAPI = FastAPI(
     title="LangGraph Research Agent API",
     description="API for interacting with a LangGraph-powered research agent",
     version="1.0.0",
@@ -35,10 +36,10 @@ app.add_middleware(
 
 # Initialize the LangGraph
 try:
-    graph = create_graph()
+    graph_instance = graph
 except Exception as e:
     print(f"Warning: Failed to initialize graph: {e}")
-    graph = None
+    graph_instance = None
 
 
 # Pydantic models for API requests/responses
@@ -59,7 +60,7 @@ class ResearchResponse(BaseModel):
 
     success: bool
     message: str
-    data: Dict[str, Any] = None
+    data: Optional[Dict[str, Any]] = None
 
 
 class HealthResponse(BaseModel):
@@ -71,29 +72,29 @@ class HealthResponse(BaseModel):
 
 
 @app.get("/", response_model=Dict[str, str])
-async def root():
+async def root() -> Dict[str, str]:
     """Root endpoint."""
     return {"message": "LangGraph Research Agent API", "version": "1.0.0"}
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health_check():
+async def health_check() -> HealthResponse:
     """Health check endpoint."""
     return HealthResponse(
-        status="healthy", version="1.0.0", graph_ready=graph is not None
+        status="healthy", version="1.0.0", graph_ready=graph_instance is not None
     )
 
 
 @app.post("/research", response_model=ResearchResponse)
-async def research(request: ResearchRequest):
+async def research(request: ResearchRequest) -> ResearchResponse:
     """Perform research using the LangGraph agent."""
-    if graph is None:
+    if graph_instance is None:
         raise HTTPException(status_code=503, detail="LangGraph agent is not available")
 
     try:
         # Prepare the initial state
         initial_state: OverallState = {
-            "messages": [{"role": "user", "content": request.question}],
+            "messages": [HumanMessage(content=request.question)],
             "search_query": [],
             "web_research_result": [],
             "sources_gathered": [],
@@ -104,15 +105,15 @@ async def research(request: ResearchRequest):
         }
 
         # Execute the graph
-        result = graph.invoke(initial_state)
+        result: Dict[str, Any] = graph_instance.invoke(initial_state)
 
         # Extract the final answer from the result
-        final_answer = None
+        final_answer: Optional[str] = None
         if "messages" in result and result["messages"]:
             # Find the last AI message
             for message in reversed(result["messages"]):
-                if message.get("role") == "assistant":
-                    final_answer = message.get("content")
+                if hasattr(message, "content"):
+                    final_answer = message.content
                     break
 
         return ResearchResponse(
@@ -133,11 +134,11 @@ async def research(request: ResearchRequest):
 
 
 @app.get("/config")
-async def get_config():
+async def get_config() -> Dict[str, Any]:
     """Get current configuration information."""
-    config = {
+    config: Dict[str, Any] = {
         "gemini_api_key_set": bool(os.getenv("GEMINI_API_KEY")),
-        "graph_ready": graph is not None,
+        "graph_ready": graph_instance is not None,
         "environment": os.getenv("ENVIRONMENT", "development"),
     }
     return config

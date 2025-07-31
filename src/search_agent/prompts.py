@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 # Get current date in a readable format
-def get_current_date():
+def get_current_date() -> str:
     """Return the current date as a formatted string in 'Month Day, Year' format.
 
     Returns:
@@ -157,13 +157,15 @@ Summaries:
 
 # Legacy variables for backward compatibility (deprecated)
 # These will be removed in future versions
-query_writer_instructions = (
+query_writer_instructions: str = (
     """DEPRECATED: Use get_query_writer_instructions() function instead."""
 )
-web_searcher_instructions = (
+web_searcher_instructions: str = (
     """DEPRECATED: Use get_web_searcher_instructions() function instead."""
 )
-reflection_instructions = (
+reflection_instructions: str = (
     """DEPRECATED: Use get_reflection_instructions() function instead."""
 )
-answer_instructions = """DEPRECATED: Use get_answer_instructions() function instead."""
+answer_instructions: str = (
+    """DEPRECATED: Use get_answer_instructions() function instead."""
+)

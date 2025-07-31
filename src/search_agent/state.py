@@ -8,10 +8,19 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import List, TypedDict
 
+from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
 from typing_extensions import Annotated
+
+
+class SourceSegment(TypedDict):
+    """Type definition for source segment."""
+
+    label: str
+    short_url: str
+    value: str
 
 
 class OverallState(TypedDict):
@@ -21,10 +30,10 @@ class OverallState(TypedDict):
         TypedDict (TypedDict): A dictionary representing the overall state.
     """
 
-    messages: Annotated[list, add_messages]
-    search_query: Annotated[list, operator.add]
-    web_research_result: Annotated[list, operator.add]
-    sources_gathered: Annotated[list, operator.add]
+    messages: Annotated[List[AnyMessage], add_messages]
+    search_query: Annotated[List[str], operator.add]
+    web_research_result: Annotated[List[str], operator.add]
+    sources_gathered: Annotated[List[SourceSegment], operator.add]
     initial_search_query_count: int
     max_research_loops: int
     research_loop_count: int
@@ -36,7 +45,7 @@ class ReflectionState(TypedDict):
 
     is_sufficient: bool
     knowledge_gap: str
-    follow_up_queries: Annotated[list, operator.add]
+    follow_up_queries: Annotated[List[str], operator.add]
     research_loop_count: int
     number_of_ran_queries: int
 
@@ -51,14 +60,14 @@ class Query(TypedDict):
 class QueryGenerationState(TypedDict):
     """State for generating search queries."""
 
-    search_query: list[Query]
+    search_query: List[Query]
 
 
 class WebSearchState(TypedDict):
     """State for web search operations."""
 
     search_query: str
-    id: str
+    id: int
 
 
 @dataclass(kw_only=True)

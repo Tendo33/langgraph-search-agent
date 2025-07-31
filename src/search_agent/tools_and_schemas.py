@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class SearchQueryList(BaseModel):
+    """Schema for search query list output."""
+
     query: List[str] = Field(
         description="A list of search queries to be used for web research."
     )
@@ -13,6 +15,8 @@ class SearchQueryList(BaseModel):
 
 
 class Reflection(BaseModel):
+    """Schema for reflection output."""
+
     is_sufficient: bool = Field(
         description="Whether the provided summaries are sufficient to answer the user's question."
     )

@@ -4,7 +4,7 @@ Defines the Configuration class for managing agent settings such as model names 
 """
 
 import os
-from typing import Any
+from typing import Any, Dict, Optional
 
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
@@ -40,20 +40,27 @@ class Configuration(BaseModel):
 
     @classmethod
     def from_runnable_config(
-        cls, config: RunnableConfig | None = None
+        cls, config: Optional[RunnableConfig] = None
     ) -> "Configuration":
-        """Create a Configuration instance from a RunnableConfig."""
-        configurable = (
+        """Create a Configuration instance from a RunnableConfig.
+
+        Args:
+            config: Optional RunnableConfig containing configuration values
+
+        Returns:
+            Configuration: A new Configuration instance with values from config
+        """
+        configurable: Dict[str, Any] = (
             config["configurable"] if config and "configurable" in config else {}
         )
 
         # Get raw values from environment or config
-        raw_values: dict[str, Any] = {
+        raw_values: Dict[str, Any] = {
             name: os.environ.get(name.upper(), configurable.get(name))
             for name in cls.model_fields.keys()
         }
 
         # Filter out None values
-        values = {k: v for k, v in raw_values.items() if v is not None}
+        values: Dict[str, Any] = {k: v for k, v in raw_values.items() if v is not None}
 
         return cls(**values)

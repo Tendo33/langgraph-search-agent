@@ -16,11 +16,11 @@ from langgraph.types import Send
 
 from agent.configuration import Configuration
 from agent.prompts import (
-    answer_instructions,
+    get_answer_instructions,
     get_current_date,
-    query_writer_instructions,
-    reflection_instructions,
-    web_searcher_instructions,
+    get_query_writer_instructions,
+    get_reflection_instructions,
+    get_web_searcher_instructions,
 )
 from agent.state import (
     OverallState,
@@ -76,7 +76,7 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
 
     # Format the prompt
     current_date = get_current_date()
-    formatted_prompt = query_writer_instructions.format(
+    formatted_prompt = get_query_writer_instructions(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
         number_queries=state["initial_search_query_count"],
@@ -111,7 +111,7 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     """
     # Configure
     configurable = Configuration.from_runnable_config(config)
-    formatted_prompt = web_searcher_instructions.format(
+    formatted_prompt = get_web_searcher_instructions(
         current_date=get_current_date(),
         research_topic=state["search_query"],
     )
@@ -161,9 +161,8 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     reasoning_model = state.get("reasoning_model", configurable.reflection_model)
 
     # Format the prompt
-    current_date = get_current_date()
-    formatted_prompt = reflection_instructions.format(
-        current_date=current_date,
+    # current_date = get_current_date()
+    formatted_prompt = get_reflection_instructions(
         research_topic=get_research_topic(state["messages"]),
         summaries="\n\n---\n\n".join(state["web_research_result"]),
     )
@@ -240,7 +239,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
 
     # Format the prompt
     current_date = get_current_date()
-    formatted_prompt = answer_instructions.format(
+    formatted_prompt = get_answer_instructions(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
         summaries="\n---\n\n".join(state["web_research_result"]),

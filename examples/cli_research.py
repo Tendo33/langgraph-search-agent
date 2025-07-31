@@ -8,13 +8,14 @@ Options:
     --max-loops=N        Maximum number of research loops (default: 2)
     --reasoning-model=M  Model for the final answer (default: gemini-2.5-pro-preview-05-06)
 """
+
 import argparse
 from typing import List
 
 from langchain_core.messages import AnyMessage, HumanMessage
 
-from search_agent.agent.graph import graph
-from search_agent.agent.state import OverallState
+from search_agent.graph import graph
+from search_agent.state import OverallState
 
 
 def main() -> None:

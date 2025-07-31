@@ -8,6 +8,7 @@ import requests
 # API base URL
 BASE_URL = "http://localhost:8000"
 
+
 def test_health():
     """Test the health endpoint."""
     print("Testing health endpoint...")
@@ -15,6 +16,7 @@ def test_health():
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
     print()
+
 
 def test_config():
     """Test the config endpoint."""
@@ -24,23 +26,24 @@ def test_config():
     print(f"Response: {json.dumps(response.json(), indent=2)}")
     print()
 
+
 def test_research():
     """Test the research endpoint."""
     print("Testing research endpoint...")
-    
+
     # Example research request
     research_data = {
         "question": "What are the latest developments in artificial intelligence?",
         "max_research_loops": 2,
-        "initial_search_query_count": 2
+        "initial_search_query_count": 2,
     }
-    
+
     print(f"Sending research request: {json.dumps(research_data, indent=2)}")
     print("This may take a while...")
-    
+
     response = requests.post(f"{BASE_URL}/research", json=research_data)
     print(f"Status: {response.status_code}")
-    
+
     if response.status_code == 200:
         result = response.json()
         print("Research completed successfully!")
@@ -51,11 +54,12 @@ def test_research():
         print(f"Error: {response.text}")
     print()
 
+
 def main():
     """Run all tests."""
     print("LangGraph Research Agent API Test")
     print("=" * 40)
-    
+
     try:
         test_health()
         test_config()
@@ -67,5 +71,6 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
 
+
 if __name__ == "__main__":
-    main() 
+    main()

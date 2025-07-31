@@ -1,10 +1,20 @@
+"""Run the LangGraph research agent from the command line.
+
+Usage:
+    python cli_research.py "What is the capital of France?"
+
+Options:
+    --initial-queries=N  Number of initial search queries (default: 3)
+    --max-loops=N        Maximum number of research loops (default: 2)
+    --reasoning-model=M  Model for the final answer (default: gemini-2.5-pro-preview-05-06)
+"""
 import argparse
 from typing import List
 
 from langchain_core.messages import AnyMessage, HumanMessage
 
-from agent.graph import graph
-from agent.state import OverallState
+from search_agent.agent.graph import graph
+from search_agent.agent.state import OverallState
 
 
 def main() -> None:

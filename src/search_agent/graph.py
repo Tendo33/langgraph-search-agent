@@ -14,22 +14,22 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
-from agent.configuration import Configuration
-from agent.prompts import (
+from search_agent.configuration import Configuration
+from search_agent.prompts import (
     get_answer_instructions,
     get_current_date,
     get_query_writer_instructions,
     get_reflection_instructions,
     get_web_searcher_instructions,
 )
-from agent.state import (
+from search_agent.state import (
     OverallState,
     QueryGenerationState,
     ReflectionState,
     WebSearchState,
 )
-from agent.tools_and_schemas import Reflection, SearchQueryList
-from agent.utils import (
+from search_agent.tools_and_schemas import Reflection, SearchQueryList
+from search_agent.utils import (
     get_citations,
     get_research_topic,
     insert_citation_markers,

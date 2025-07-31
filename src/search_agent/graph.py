@@ -130,7 +130,8 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     )
     # resolve the urls to short urls for saving tokens and time
     resolved_urls: Dict[str, str] = resolve_urls(
-        response.candidates[0].grounding_metadata.grounding_chunks, state["id"]
+        urls_to_resolve=response.candidates[0].grounding_metadata.grounding_chunks,
+        id=state["id"],
     )
     # Gets the citations and adds them to the generated text
     citations: List[Citation] = get_citations(response, resolved_urls)

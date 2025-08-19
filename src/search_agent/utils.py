@@ -5,8 +5,6 @@ from typing import Any, Dict, List, TypedDict
 from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 
-from .state import SourceSegment
-
 
 class CitationSegment(TypedDict):
     """Type definition for citation segment."""
@@ -112,8 +110,7 @@ def get_citations(
     containing formatted markdown links to the supporting web chunks.
 
     Args:
-        response (GenerateContentResponse): The response object from the Gemini model, expected to have
-                  a structure including `candidates[0].grounding_metadata`.
+        response (GenerateContentResponse): The response object from the Gemini model, expected to have a structure including `candidates[0].grounding_metadata`.
         resolved_urls_map (Dict[str, str]): A mapping of chunk URIs to resolved URLs.
 
     Returns:

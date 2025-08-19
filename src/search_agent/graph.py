@@ -5,7 +5,6 @@ performs web research, reflects on results, and finalizes answers using Gemini m
 """
 
 import os
-import asyncio
 from typing import Dict, List, Union
 
 from dotenv import load_dotenv
@@ -16,6 +15,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from search_agent.async_client import get_async_client
 from search_agent.configuration import Configuration
 from search_agent.prompts import (
     get_answer_instructions,
@@ -38,7 +38,6 @@ from search_agent.utils import (
     insert_citation_markers,
     resolve_urls,
 )
-from search_agent.async_client import get_async_client
 
 load_dotenv()
 

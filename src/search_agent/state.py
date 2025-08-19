@@ -1,13 +1,12 @@
 """State definitions and data structures for the agent's operation.
 
-This module defines TypedDicts and dataclasses used to manage and track the state
+This module defines TypedDicts used to manage and track the state
 of the agent, including overall state, reflection, query generation, and web search.
 """
 
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, field
 from typing import List, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -68,10 +67,3 @@ class WebSearchState(TypedDict):
 
     search_query: str
     id: int
-
-
-@dataclass(kw_only=True)
-class SearchStateOutput:
-    """Output state for search operations."""
-
-    running_summary: str = field(default=None)  # Final report

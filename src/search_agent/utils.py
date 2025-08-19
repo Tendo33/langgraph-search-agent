@@ -5,6 +5,8 @@ from typing import Any, Dict, List, TypedDict
 from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 
+from .state import SourceSegment
+
 
 class CitationSegment(TypedDict):
     """Type definition for citation segment."""
@@ -20,14 +22,6 @@ class Citation(TypedDict):
     start_index: int
     end_index: int
     segments: List[CitationSegment]
-
-
-class SourceSegment(TypedDict):
-    """Type definition for source segment."""
-
-    label: str
-    short_url: str
-    value: str
 
 
 def get_research_topic(messages: List[AnyMessage]) -> str:

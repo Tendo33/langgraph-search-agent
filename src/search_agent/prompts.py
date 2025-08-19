@@ -153,19 +153,3 @@ User Context:
 
 Summaries:
 {summaries}"""
-
-
-# Legacy variables for backward compatibility (deprecated)
-# These will be removed in future versions
-query_writer_instructions: str = (
-    """DEPRECATED: Use get_query_writer_instructions() function instead."""
-)
-web_searcher_instructions: str = (
-    """DEPRECATED: Use get_web_searcher_instructions() function instead."""
-)
-reflection_instructions: str = (
-    """DEPRECATED: Use get_reflection_instructions() function instead."""
-)
-answer_instructions: str = (
-    """DEPRECATED: Use get_answer_instructions() function instead."""
-)

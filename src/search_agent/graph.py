@@ -5,10 +5,10 @@ performs web research, reflects on results, and finalizes answers using Gemini m
 """
 
 import os
+import asyncio
 from typing import Dict, List, Union
 
 from dotenv import load_dotenv
-from google.genai import Client
 from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -38,18 +38,20 @@ from search_agent.utils import (
     insert_citation_markers,
     resolve_urls,
 )
+from search_agent.async_client import get_async_client
 
 load_dotenv()
 
 if os.getenv("GEMINI_API_KEY") is None:
     raise ValueError("GEMINI_API_KEY is not set")
 
-# Used for Google Search API
-genai_client: Client = Client(api_key=os.getenv("GEMINI_API_KEY"))
+async_client = get_async_client(os.getenv("GEMINI_API_KEY"))
 
 
 # Nodes
-def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
+async def generate_query(
+    state: OverallState, config: RunnableConfig
+) -> QueryGenerationState:
     """LangGraph node that generates search queries based on the User's question.
 
     Uses Gemini 2.0 Flash to create an optimized search queries for web research based on
@@ -85,11 +87,11 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
         number_queries=state["initial_search_query_count"],
     )
     # Generate the search queries
-    result: SearchQueryList = structured_llm.invoke(formatted_prompt)
+    result: SearchQueryList = await structured_llm.ainvoke(formatted_prompt)
     return {"search_query": result.query}
 
 
-def continue_to_web_research(state: QueryGenerationState) -> List[Send]:
+async def continue_to_web_research(state: QueryGenerationState) -> List[Send]:
     """LangGraph node that sends the search queries to the web research node.
 
     This is used to spawn n number of web research nodes, one for each search query.
@@ -100,7 +102,7 @@ def continue_to_web_research(state: QueryGenerationState) -> List[Send]:
     ]
 
 
-def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
+async def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     """LangGraph node that performs web research using the native Google Search API tool.
 
     Executes a web search using the native Google Search API tool in combination with Gemini 2.0 Flash.
@@ -119,8 +121,8 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         research_topic=state["search_query"],
     )
 
-    # Uses the google genai client as the langchain client doesn't return grounding metadata
-    response: GenerateContentResponse = genai_client.models.generate_content(
+    # Uses the async google genai client for better performance
+    response: GenerateContentResponse = await async_client.generate_content(
         model=configurable.query_generator_model,
         contents=formatted_prompt,
         config={
@@ -147,7 +149,7 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     }
 
 
-def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
+async def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     """LangGraph node that identifies knowledge gaps and generates potential follow-up queries.
 
     Analyzes the current summary to identify areas for further research and generates
@@ -167,7 +169,6 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     reasoning_model: str = state.get("reasoning_model", configurable.reflection_model)
 
     # Format the prompt
-    # current_date = get_current_date()
     formatted_prompt: str = get_reflection_instructions(
         research_topic=get_research_topic(state["messages"]),
         summaries="\n\n---\n\n".join(state["web_research_result"]),
@@ -179,7 +180,9 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    result: Reflection = llm.with_structured_output(Reflection).invoke(formatted_prompt)
+    result: Reflection = await llm.with_structured_output(Reflection).ainvoke(
+        formatted_prompt
+    )
 
     return {
         "is_sufficient": result.is_sufficient,
@@ -190,7 +193,7 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     }
 
 
-def evaluate_research(
+async def evaluate_research(
     state: ReflectionState,
     config: RunnableConfig,
 ) -> Union[str, List[Send]]:
@@ -227,7 +230,7 @@ def evaluate_research(
         ]
 
 
-def finalize_answer(state: OverallState, config: RunnableConfig) -> OverallState:
+async def finalize_answer(state: OverallState, config: RunnableConfig) -> OverallState:
     """LangGraph node that finalizes the research summary.
 
     Prepares the final output by deduplicating and formatting sources, then
@@ -258,7 +261,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig) -> OverallState
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    result: AIMessage = llm.invoke(formatted_prompt)
+    result: AIMessage = await llm.ainvoke(formatted_prompt)
 
     # Replace the short urls with the original urls and add all used urls to the sources_gathered
     unique_sources: List[Dict[str, str]] = []

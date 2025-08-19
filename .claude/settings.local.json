@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(ruff format:*)",
+      "Bash(ruff check:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

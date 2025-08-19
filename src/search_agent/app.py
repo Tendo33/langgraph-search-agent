@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
+from search_agent.async_client import close_async_client
 from search_agent.graph import graph
 from search_agent.state import OverallState
 
@@ -104,8 +105,8 @@ async def research(request: ResearchRequest) -> ResearchResponse:
             "reasoning_model": "gemini-2.0-flash-exp",
         }
 
-        # Execute the graph
-        result: Dict[str, Any] = graph_instance.invoke(initial_state)
+        # Execute the graph asynchronously
+        result: Dict[str, Any] = await graph_instance.ainvoke(initial_state)
 
         # Extract the final answer from the result
         final_answer: Optional[str] = None
@@ -142,6 +143,12 @@ async def get_config() -> Dict[str, Any]:
         "environment": os.getenv("ENVIRONMENT", "development"),
     }
     return config
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources when the app shuts down."""
+    await close_async_client()
 
 
 if __name__ == "__main__":

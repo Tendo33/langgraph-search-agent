@@ -1,8 +1,6 @@
-"""Gradio前端界面，用于调用LangGraph Research Agent API。"""
+"""Gradio前端界面，用于调用LangGraph Research Agent API."""
 
-import json
-import time
-from typing import Tuple, Any
+from typing import Tuple
 
 import gradio as gr
 import requests
@@ -13,7 +11,7 @@ API_URL = "http://localhost:8000/research"
 def call_research_api(
     question: str, max_loops: int, query_count: int
 ) -> Tuple[str, str, str]:
-    """调用后端/research API，返回答案、循环信息和引用来源。"""
+    """调用后端/research API，返回答案、循环信息和引用来源."""
     if not question or not question.strip():
         return create_error_response("请输入研究问题")
 
@@ -52,7 +50,7 @@ def call_research_api(
 
 
 def create_loading_state():
-    """创建加载状态显示。"""
+    """创建加载状态显示."""
     loading_answer = """
 ## 🔍 正在进行研究...
 
@@ -83,9 +81,9 @@ def create_loading_state():
 
 
 def format_answer(answer: str, sources: list) -> str:
-    """格式化答案，添加样式和引用。"""
+    """格式化答案，添加样式和引用."""
     if not answer or answer == "无结果":
-        return "❌ 抱歉，没有找到相关的研究结果。"
+        return "❌ 抱歉，没有找到相关的研究结果."
 
     # 添加标题和分隔线
     formatted = f"""
@@ -100,7 +98,7 @@ def format_answer(answer: str, sources: list) -> str:
 
 
 def format_loop_info(loops: int, query_count: int) -> str:
-    """格式化循环信息。"""
+    """格式化循环信息."""
     return f"""
 ### 📈 研究统计
 - **实际循环次数**: {loops}
@@ -110,7 +108,7 @@ def format_loop_info(loops: int, query_count: int) -> str:
 
 
 def format_sources(sources: list) -> str:
-    """格式化来源信息。"""
+    """格式化来源信息."""
     if not sources:
         return "暂无来源信息"
 
@@ -128,7 +126,7 @@ def format_sources(sources: list) -> str:
 
 
 def create_error_response(error_msg: str) -> Tuple[str, str, str]:
-    """创建错误响应。"""
+    """创建错误响应."""
     error_display = f"""
 ## ❌ 研究失败
 
@@ -332,7 +330,7 @@ with gr.Blocks(
 
 
 def main():
-    """Gradio应用入口。"""
+    """Gradio应用入口."""
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,

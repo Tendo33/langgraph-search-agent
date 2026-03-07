@@ -1,24 +1,25 @@
 ﻿# 07｜术语表（LangGraph 初学者速查）
 
-这份术语表建议你放在旁边随时查。
-
 ## A
 
 - **Agent**
-  - 由多个步骤组成、可根据中间结果自我调整流程的程序。
+  - 能在多步骤中自主决策、循环和并发执行的程序。
+
+- **AgentState**
+  - 本项目统一后的全局状态契约，定义在 `src/search_agent/state.py`。
 
 ## C
 
 - **Conditional Edge（条件边）**
-  - 动态路由连线。由函数返回值决定下一步节点。
+  - 根据当前状态动态决定下一步去向。
 
 - **Compile（编译图）**
-  - 把声明好的节点和边转换成可执行图对象的过程。
+  - 将图定义编译为可执行对象。
 
 ## E
 
 - **Edge（边）**
-  - 节点之间的连接关系。普通边是固定流向。
+  - 节点之间的固定连线。
 
 - **END**
   - 图执行结束标记。
@@ -26,55 +27,41 @@
 ## N
 
 - **Node（节点）**
-  - 图中的一个步骤函数。输入状态，输出状态更新。
+  - 单一职责步骤函数：读状态、产出状态更新。
 
 ## R
 
 - **Reducer（归并器）**
-  - 多分支同时更新同一字段时的合并规则。
+  - 多分支更新同一字段时的合并规则。
 
 - **RunnableConfig**
-  - 运行时配置容器，可向节点传模型和参数配置。
+  - 运行时配置容器；本项目通过 `configurable` 注入模型与循环参数。
 
 ## S
 
 - **Send**
-  - 向某个节点派发一份任务输入的对象，常用于并行扇出。
+  - 扇出任务对象，用于并行调用同一节点。
 
 - **START**
   - 图执行起点标记。
 
-- **State（状态）**
-  - 图中共享数据容器，所有节点读写它。
-
 - **StateGraph**
-  - 以状态为核心的图构建器。
+  - 以共享状态为核心的图构建器。
 
-## 本项目专有字段速查
+## 本项目字段速查
 
-- `messages`：对话消息历史
-- `search_query`：查询词列表
-- `web_research_result`：检索结果摘要
-- `sources_gathered`：来源列表
-- `research_loop_count`：当前循环次数
-- `max_research_loops`：最大循环次数
+- `messages`：消息历史
+- `search_query`：查询词累积列表
+- `web_research_result`：检索摘要累积列表
+- `sources_gathered`：来源片段累积列表
+- `is_sufficient`：反思结果是否足够
+- `follow_up_queries`：后续检索查询
+- `research_loop_count`：当前循环计数
 
-## 初学者最容易混淆的三对概念
-
-1. `Edge` vs `Conditional Edge`
-   - 前者固定路径，后者动态路径。
-
-2. `Conditional Edge` vs `Send`
-   - 前者做决策，后者做派发。
-
-3. `State` vs `RunnableConfig`
-   - `State` 是任务数据，`RunnableConfig` 是运行配置。
-
-## 口诀（方便记忆）
+## 记忆口诀
 
 - 状态承载数据
 - 节点处理数据
-- 边决定顺序
-- 条件边决定分支
-- Send 决定并发
-- reducer 决定合并
+- 条件边做决策
+- Send 做并发
+- reducer 做合并

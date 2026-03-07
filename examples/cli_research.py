@@ -1,13 +1,10 @@
-"""Run the LangGraph research agent from the command line.
+﻿"""Run the LangGraph research agent from the command line.
 
 Usage:
-    python cli_research.py "What is the capital of France?"
-
-Options:
-    --initial-queries=N  Number of initial search queries (default: 3)
-    --max-loops=N        Maximum number of research loops (default: 2)
-    --reasoning-model=M  Model for the final answer (default: gemini-2.5-pro-preview-05-06)
+    python examples/cli_research.py "What is LangGraph?"
 """
+
+from __future__ import annotations
 
 import argparse
 from typing import Any, Dict, List
@@ -15,42 +12,40 @@ from typing import Any, Dict, List
 from langchain_core.messages import AnyMessage, HumanMessage
 
 from search_agent.graph import graph
-from search_agent.state import OverallState
+from search_agent.state import AgentState
 
 
 def main() -> None:
     """Run the research agent from the command line."""
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="Run the LangGraph research agent"
-    )
+    parser = argparse.ArgumentParser(description="Run the LangGraph research agent")
     parser.add_argument("question", help="Research question")
-    parser.add_argument(
-        "--initial-queries",
-        type=int,
-        default=3,
-        help="Number of initial search queries",
-    )
-    parser.add_argument(
-        "--max-loops",
-        type=int,
-        default=2,
-        help="Maximum number of research loops",
-    )
-    parser.add_argument(
-        "--reasoning-model",
-        default="gemini-2.5-pro-preview-05-06",
-        help="Model for the final answer",
-    )
-    args: argparse.Namespace = parser.parse_args()
+    parser.add_argument("--initial-queries", type=int, default=3)
+    parser.add_argument("--max-loops", type=int, default=2)
+    parser.add_argument("--query-generator-model", default="gemini-2.5-flash")
+    parser.add_argument("--reflection-model", default="gemini-2.5-flash")
+    parser.add_argument("--answer-model", default="gemini-2.5-pro")
+    args = parser.parse_args()
 
-    state: Dict[str, Any] = {
+    state: AgentState = {
         "messages": [HumanMessage(content=args.question)],
+        "search_query": [],
+        "web_research_result": [],
+        "sources_gathered": [],
+        "research_loop_count": 0,
         "initial_search_query_count": args.initial_queries,
         "max_research_loops": args.max_loops,
-        "reasoning_model": args.reasoning_model,
+        "reasoning_model": args.answer_model,
     }
 
-    result: OverallState = graph.invoke(state)
+    configurable: Dict[str, Any] = {
+        "number_of_initial_queries": args.initial_queries,
+        "max_research_loops": args.max_loops,
+        "query_generator_model": args.query_generator_model,
+        "reflection_model": args.reflection_model,
+        "answer_model": args.answer_model,
+    }
+
+    result: AgentState = graph.invoke(state, config={"configurable": configurable})
     messages: List[AnyMessage] = result.get("messages", [])
     if messages:
         print(messages[-1].content)

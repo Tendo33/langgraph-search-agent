@@ -1,4 +1,4 @@
-[project]
+﻿[project]
 name = "search_agent"
 version = "0.0.1"
 description = "Backend for the LangGraph agent"
@@ -22,6 +22,7 @@ dependencies = [
     "requests",
     "aiohttp>=3.9.0",
     "httptools>=0.6.0",
+    "gradio>=4.44.0",
 ]
 
 

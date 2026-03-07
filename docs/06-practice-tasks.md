@@ -1,151 +1,83 @@
 ﻿# 06｜练习任务：从“能跑”到“会设计”
 
-你可以把这篇当作训练营。每个任务都给了目标、步骤、验收标准。
-
----
+本练习完全基于当前新版契约（`ok/data/error`、`AgentState`、请求级 `options`）。
 
 ## 任务 1：读图不迷路
 
-## 目标
+目标：看懂主流程和节点职责。
 
-看懂本项目主流程图与每个节点职责。
-
-## 步骤
+步骤：
 
 1. 打开 `src/search_agent/graph.py`
 2. 找到 `add_node`、`add_edge`、`add_conditional_edges`
-3. 画出你自己的流程图
+3. 画出流程图并标出路由函数
 
-## 验收标准
-
-你能口头解释：
-
-- 为什么 `reflection` 后是条件边
-- 为什么 `generate_query` 后是并行 `Send`
-
----
+验收：能解释为什么 `generate_query` 后是 `Send` 并行，`reflection` 后是条件路由。
 
 ## 任务 2：观察状态流
 
-## 目标
+目标：理解 `AgentState` 的生命周期。
 
-理解状态字段如何在多轮中增长。
+步骤：
 
-## 步骤
+1. 在节点中打印关键字段长度
+2. 调用 `/research`
+3. 追踪 `search_query`、`web_research_result`、`sources_gathered`
 
-1. 在 4 个节点加日志
-2. 发起一个 `/research` 请求
-3. 记录每步 `search_query`、`web_research_result`、`sources_gathered` 长度
+验收：能区分累积字段、控制字段、配置字段。
 
-## 验收标准
+## 任务 3：操控循环与配置
 
-你能指出：
+目标：验证请求级配置生效。
 
-- 哪些字段是累积的
-- 哪些字段是控制流程的
+步骤：
 
----
+1. 用同一问题分别传 `options.max_research_loops=1/2/3`
+2. 比较 `data.meta.research_loop_count`
+3. 额外切换 `options.models.answer`
 
-## 任务 3：操控循环次数
+验收：能解释“请求参数如何覆盖默认值”。
 
-## 目标
+## 任务 4：写最小图
 
-验证条件边如何受 `max_research_loops` 影响。
+目标：独立写出带条件路由的最小 LangGraph。
 
-## 步骤
+步骤：
 
-1. 分别用 `max_research_loops=1/2/3` 请求同一个问题
-2. 比较 `research_loops` 和答案长度
+1. 跟 `docs/04-minimal-graph-hands-on.md` 完成 demo
+2. 把 `reflect` 改为至少循环两轮
 
-## 验收标准
+验收：能同时演示路由返回节点名与 `List[Send]` 两种模式。
 
-你能解释：
+## 任务 5：扩展项目节点
 
-- 为什么循环次数变化会影响结果深度和耗时
+目标：在不破坏主流程前提下扩展图。
 
----
+建议方向：
 
-## 任务 4：写一个最小图
+- 在 `finalize_answer` 前增加质量检查节点
 
-## 目标
-
-独立写出一个带条件路由的 LangGraph。
-
-## 步骤
-
-1. 跟着 `docs/04-minimal-graph-hands-on.md` 完成 demo
-2. 把 `is_enough` 条件改成至少两条 notes 才结束
-
-## 验收标准
-
-你能展示：
-
-- 路由返回字符串时的单路径
-- 路由返回 `Send` 时的并行或再派发
-
----
-
-## 任务 5：新增一个节点（项目实战）
-
-## 目标
-
-在现有项目中添加一个中间步骤且不破坏主流程。
-
-## 推荐方向
-
-- `finalize_answer` 前新增 `quality_check`
-- 作用：检测答案里是否包含来源链接
-
-## 步骤
-
-1. 新建节点函数
-2. `add_node("quality_check", quality_check)`
-3. 调整边：`reflection -> quality_check -> finalize_answer`
-
-## 验收标准
+验收：
 
 - 服务可正常返回
-- `quality_check` 被触发
-- 最终输出结构不变
+- 新节点被触发
+- API 输出仍符合 `ok/data/error`
 
----
+## 任务 6：并发与 reducer
 
-## 任务 6：并行深入理解
+目标：彻底掌握并发回流。
 
-## 目标
+步骤：
 
-真正掌握 `Send` + reducer。
+1. 在最小 demo 扇出 3 个 `Send`
+2. 每个分支返回不同 note
+3. 验证最终列表是否完整保留
 
-## 步骤
+验收：能解释 reducer 缺失时为何发生覆盖。
 
-1. 在最小 demo 里扇出 3 个 `Send`
-2. 每个分支返回不同 `notes`
-3. 检查最终 `notes` 是否完整保留
+## 自测题
 
-## 验收标准
-
-你能解释：
-
-- 为什么没有 reducer 会丢结果
-- reducer 如何决定合并行为
-
----
-
-## 任务 7：你是否已入门（自测）
-
-如果你能独立回答以下问题，说明你已完成入门：
-
-1. 条件边何时返回字符串，何时返回 `Send` 列表？
-2. 节点为什么只返回增量状态？
-3. 如何在不影响并行合并的前提下新增字段？
-4. 为什么说“API 只是图的外壳”？
-
----
-
-## 进阶建议
-
-下一步你可以做：
-
-- 把 `reflection` 做成更严格的结构化评估
-- 把来源质量（时效性/权威性）做成独立打分节点
-- 用 LangGraph Studio 或可视化工具观察执行轨迹
+1. 条件边何时返回字符串，何时返回 `List[Send]`？
+2. 为什么节点只返回增量状态就够了？
+3. 请求级配置是如何传到节点模型选择逻辑中的？
+4. 为什么新版 API 用 `ok/data/error` 比旧格式更利于调试？

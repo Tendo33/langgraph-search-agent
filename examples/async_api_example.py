@@ -1,5 +1,7 @@
-#!/usr/bin/env python3
-"""Async example script showing how to use the LangGraph Research Agent API."""
+﻿#!/usr/bin/env python3
+"""Async example script for the new research API contract."""
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -7,69 +9,53 @@ from typing import Any, Dict
 
 import aiohttp
 
+BASE_URL = "http://localhost:8000"
 
-# API base URL
-BASE_URL: str = "http://localhost:8000"
+
+def build_payload(question: str, max_loops: int = 2, query_count: int = 2) -> Dict[str, Any]:
+    return {
+        "question": question,
+        "options": {
+            "max_research_loops": max_loops,
+            "initial_search_query_count": query_count,
+            "return_debug": False,
+        },
+    }
 
 
 async def test_health() -> None:
-    """Test the health endpoint."""
-    print("Testing health endpoint...")
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{BASE_URL}/health") as response:
-            print(f"Status: {response.status}")
-            data = await response.json()
-            print(f"Response: {json.dumps(data, indent=2)}")
-    print()
+            print("/health", response.status)
+            print(json.dumps(await response.json(), indent=2, ensure_ascii=False))
 
 
 async def test_config() -> None:
-    """Test the config endpoint."""
-    print("Testing config endpoint...")
     async with aiohttp.ClientSession() as session:
         async with session.get(f"{BASE_URL}/config") as response:
-            print(f"Status: {response.status}")
-            data = await response.json()
-            print(f"Response: {json.dumps(data, indent=2)}")
-    print()
+            print("/config", response.status)
+            print(json.dumps(await response.json(), indent=2, ensure_ascii=False))
 
 
 async def test_research() -> None:
-    """Test the research endpoint."""
-    print("Testing research endpoint...")
-
-    # Example research request
-    research_data: Dict[str, Any] = {
-        "question": "What are the latest developments in artificial intelligence?",
-        "max_research_loops": 2,
-        "initial_search_query_count": 2,
-    }
-
-    print(f"Sending research request: {json.dumps(research_data, indent=2)}")
-    print("This may take a while...")
+    payload = build_payload(
+        question="What are the latest developments in artificial intelligence?",
+        max_loops=2,
+        query_count=2,
+    )
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}/research", json=research_data) as response:
-            print(f"Status: {response.status}")
+        async with session.post(f"{BASE_URL}/research", json=payload) as response:
+            result = await response.json()
+            print("/research", response.status)
+            print(json.dumps(result, indent=2, ensure_ascii=False)[:1200])
 
-            if response.status == 200:
-                result: Dict[str, Any] = await response.json()
-                print("Research completed successfully!")
-                print(
-                    f"Answer: {result['data']['answer'][:200]}..."
-                )  # Show first 200 chars
-                print(f"Sources found: {len(result['data']['sources'])}")
-                print(f"Research loops: {result['data']['research_loops']}")
-            else:
-                error_text = await response.text()
-                print(f"Error: {error_text}")
-    print()
+            if response.status == 200 and result.get("ok"):
+                print("Answer preview:", result["data"]["answer"][:120])
+                print("Sources:", len(result["data"]["sources"]))
 
 
 async def test_parallel_research() -> None:
-    """Test multiple research requests in parallel."""
-    print("Testing parallel research requests...")
-
     questions = [
         "What are the benefits of renewable energy?",
         "How does machine learning work?",
@@ -77,34 +63,24 @@ async def test_parallel_research() -> None:
     ]
 
     async with aiohttp.ClientSession() as session:
-        tasks = []
-        for i, question in enumerate(questions):
-            research_data = {
-                "question": question,
-                "max_research_loops": 1,
-                "initial_search_query_count": 1,
-            }
-            task = session.post(f"{BASE_URL}/research", json=research_data)
-            tasks.append((i + 1, question, task))
+        tasks = [
+            session.post(
+                f"{BASE_URL}/research",
+                json=build_payload(question=question, max_loops=1, query_count=1),
+            )
+            for question in questions
+        ]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Execute all requests in parallel
-        responses = await asyncio.gather(
-            *[task for _, _, task in tasks], return_exceptions=True
-        )
-
-        for (i, question, _), response in zip(tasks, responses):
+        for index, response in enumerate(responses, start=1):
             if isinstance(response, Exception):
-                print(f"Request {i} failed: {response}")
-            else:
-                print(f"Request {i} completed: {question}")
-                result = await response.json()
-                print(f"  Status: {response.status}")
-                print(f"  Answer preview: {result['data']['answer'][:100]}...")
-    print()
+                print(f"Request {index} failed: {response}")
+                continue
+            data = await response.json()
+            print(f"Request {index}: status={response.status}, ok={data.get('ok')}")
 
 
 async def main() -> None:
-    """Run all tests."""
     print("LangGraph Research Agent API Async Test")
     print("=" * 50)
 
@@ -115,10 +91,7 @@ async def main() -> None:
         await test_parallel_research()
     except aiohttp.ClientConnectorError:
         print("Error: Could not connect to the server.")
-        print("Make sure the server is running on http://localhost:8000")
         print("Run: python run_server.py")
-    except Exception as e:
-        print(f"Error: {e}")
 
 
 if __name__ == "__main__":

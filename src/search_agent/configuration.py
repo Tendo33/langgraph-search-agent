@@ -1,7 +1,6 @@
-"""Configuration module for the agent.
+﻿"""Configuration module for the LangGraph research agent."""
 
-Defines the Configuration class for managing agent settings such as model names and loop counts.
-"""
+from __future__ import annotations
 
 import os
 from typing import Any, Dict, Optional
@@ -11,56 +10,50 @@ from pydantic import BaseModel, Field
 
 
 class Configuration(BaseModel):
-    """The configuration for the agent."""
+    """Runtime configuration for the research workflow."""
 
     query_generator_model: str = Field(
         default="gemini-2.5-flash",
-        description="The name of the language model to use for the agent's query generation.",
+        description="Model used for generating search queries.",
     )
-
     reflection_model: str = Field(
         default="gemini-2.5-flash",
-        description="The name of the language model to use for the agent's reflection.",
+        description="Model used for reflection and gap analysis.",
     )
-
     answer_model: str = Field(
         default="gemini-2.5-pro",
-        description="The name of the language model to use for the agent's answer.",
+        description="Model used for final answer synthesis.",
     )
-
     number_of_initial_queries: int = Field(
         default=3,
-        description="The number of initial search queries to generate.",
+        description="Initial number of search queries to generate.",
     )
-
     max_research_loops: int = Field(
         default=2,
-        description="The maximum number of research loops to perform.",
+        description="Maximum research loop count.",
     )
 
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
     ) -> "Configuration":
-        """Create a Configuration instance from a RunnableConfig.
-
-        Args:
-            config: Optional RunnableConfig containing configuration values
-
-        Returns:
-            Configuration: A new Configuration instance with values from config
-        """
+        """Create configuration using request config > env > defaults priority."""
         configurable: Dict[str, Any] = (
-            config["configurable"] if config and "configurable" in config else {}
+            config.get("configurable", {}) if config else {}
         )
 
-        # Get raw values from environment or config
-        raw_values: Dict[str, Any] = {
-            name: os.environ.get(name.upper(), configurable.get(name))
-            for name in cls.model_fields.keys()
-        }
+        values: Dict[str, Any] = {}
+        for name in cls.model_fields.keys():
+            if name in configurable and configurable[name] is not None:
+                values[name] = configurable[name]
+                continue
 
-        # Filter out None values
-        values: Dict[str, Any] = {k: v for k, v in raw_values.items() if v is not None}
+            env_value = os.getenv(name.upper())
+            if env_value is not None:
+                values[name] = env_value
 
         return cls(**values)
+
+    def to_configurable(self) -> Dict[str, Any]:
+        """Convert to runnable configurable dict."""
+        return self.model_dump()

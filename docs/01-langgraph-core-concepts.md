@@ -2,184 +2,115 @@
 
 这篇文档的目标：
 
-- 你不需要先会 LangGraph
-- 读完后能把核心名词讲给别人听
-- 并知道它们在本项目里的具体位置
+- 不假设你有 LangGraph 经验
+- 读完能准确解释核心术语
+- 能把术语映射到本项目最新代码
 
 ---
 
-## 1. LangGraph 到底在解决什么问题
+## 1. LangGraph 解决的本质问题
 
-如果任务只有一步（例如“把一句话翻译成英文”），普通函数就够了。
+Agent 常见任务不是一步完成，而是：
 
-但 Agent 常见任务是多步骤的：
+1. 拆问题
+2. 执行检索
+3. 反思是否足够
+4. 不够就继续
+5. 最后汇总回答
 
-- 先拆问题
-- 再检索
-- 再判断信息够不够
-- 不够就继续检索
-- 最后再生成答案
+这类任务的难点是：
 
-这类任务有 3 个典型难点：
+- **状态如何共享**（中间结果放哪）
+- **流程如何决策**（何时循环/结束）
+- **并发如何合并**（多分支结果不丢）
 
-1. **状态管理**：中间结果放哪里？
-2. **流程控制**：何时循环、何时结束？
-3. **并行执行**：多个检索任务如何同时跑并合并结果？
-
-LangGraph 的价值就是：把这三件事做成统一框架。
+LangGraph 本质上是“状态驱动的流程编排器”。
 
 ---
 
-## 2. 六个核心对象（必须会）
+## 2. 六个必须掌握的对象
 
 ## 2.1 `State`
 
-`State` 是整个图的共享数据容器，可以理解为“全局工作内存”。
+`State` 是图的共享内存。本项目已统一为 `AgentState`：
 
-在本项目里，关键字段有：
+- 文件：`src/search_agent/state.py`
+- 关键字段：`messages`、`search_query`、`web_research_result`、`sources_gathered`
+- 路由字段：`is_sufficient`、`follow_up_queries`、`research_loop_count`
 
-- `messages`：用户问题与模型回复
-- `search_query`：已生成/已执行的查询词
-- `web_research_result`：检索摘要
-- `sources_gathered`：来源列表
-- `research_loop_count`：已执行轮数
-
-文件：`D:/TuDou/langgraph-search-agent/src/search_agent/state.py`
-
----
+理解方式：它像“全过程公共黑板”。
 
 ## 2.2 `Node`
 
-`Node` 是一个步骤函数。它做一件事：
+`Node` 是一个步骤函数：
 
 - 读 `state`
-- 执行逻辑
-- 返回状态更新
+- 做一件事
+- 返回“增量状态更新”
 
-典型节点：
-
-- `generate_query`
-- `web_research`
-- `reflection`
-- `finalize_answer`
-
-文件：`D:/TuDou/langgraph-search-agent/src/search_agent/graph.py`
-
----
+本项目节点：`generate_query`、`web_research`、`reflection`、`finalize_answer`。
 
 ## 2.3 `Edge`
 
-`Edge` 是固定连线：执行完 A 一定去 B。
-
-例子：
-
-- `web_research -> reflection`
-- `finalize_answer -> END`
-
-适合“顺序明确”的路径。
-
----
+固定连线，执行完 A 总是去 B。示例：`web_research -> reflection`。
 
 ## 2.4 `Conditional Edge`
 
-条件边是动态路由：下一步由函数根据当前状态决定。
-
-本项目中 `reflection` 后并不固定走向，而是由 `evaluate_research` 判断：
-
-- 信息足够：去 `finalize_answer`
-- 信息不足：继续去 `web_research`
-
-这就是循环闭环的核心。
-
----
+动态连线，下一步由函数返回值决定。示例：`reflection` 后走 `evaluate_research`。
 
 ## 2.5 `Send`
 
-`Send` 是“派发任务”的对象，常用于并行。
-
-形式：
+扇出任务对象，用于并行调度同一节点：
 
 ```python
 Send("web_research", {"search_query": "...", "id": 0})
 ```
 
-含义：
-
-- 把一份输入发送给某个节点
-- 可以一次返回多个 `Send`
-- 这样就能扇出多个并行分支
-
-本项目用它并发执行多个搜索查询。
-
----
+多个 `Send` = 多分支并行执行。
 
 ## 2.6 `Reducer`
 
-并发分支结束后，状态需要合并。Reducer 就是合并规则。
-
-本项目核心 reducer：
+并发分支回流时的字段合并规则。本项目常用：
 
 - `operator.add`：列表拼接
 - `add_messages`：消息合并
 
-定义写在 `Annotated[类型, reducer]` 里。
-
-没有 reducer，分支结果容易互相覆盖。
+没有 reducer，分支结果容易覆盖丢失。
 
 ---
 
-## 3. `Send` 和条件边的关系（重点）
+## 3. 本项目里最关键的组合
 
-很多初学者会混淆：
+### `Conditional Edge + Send`
 
-- 条件边负责“决定走哪条路”
-- `Send` 负责“给目标节点发几份任务”
+这是“边判断边并发”的核心模式：
 
-你可以把它理解为：
+1. 条件边先判断是否继续研究
+2. 若继续，返回 `List[Send]` 扇出 follow-up 查询
 
-1. 先判断“是否继续研究”
-2. 如果继续，再返回多个 `Send` 并行执行
-
-所以 `Conditional Edge + Send` 组合就能实现“可判断 + 可并发”的高级路由。
+这就是本项目多轮研究的关键机制。
 
 ---
 
-## 4. 为什么这个项目要用 LangGraph 而不是 while + for
+## 4. 新版工程化补充（改造后）
 
-你当然可以手写：
+除了图结构，你还要知道两个现实工程点：
 
-- `while not enough:`
-- `for query in queries:`
+1. **统一状态契约**：由 `AgentState` 统一所有节点读写字段
+2. **请求级配置透传**：API 调 `graph.ainvoke(..., config={"configurable": ...})`
 
-但很快会出现：
-
-- 状态字段越来越多，传参变混乱
-- 并发回流时不清楚谁覆盖了谁
-- 每加一个步骤都改大量流程代码
-
-LangGraph 的结构化好处：
-
-- 节点职责单一
-- 路由显式可读
-- 状态合并有规则
-- 扩展新节点时改动可控
+这两点让流程更稳定、可维护、可调参。
 
 ---
 
-## 5. 最小心智模型（一句话）
+## 5. 一句话心智模型
 
-LangGraph = `状态容器` + `步骤函数` + `路由逻辑` + `合并规则`。
+LangGraph = `State` + `Node` + `Routing` + `Reducer`。
 
-掌握这四块，你就已经入门。
+你能解释这四个组件如何配合，就算真正入门。
 
 ---
 
-## 6. 阅读建议（接下来做什么）
+## 6. 下一篇建议
 
-下一篇请看：`docs/02-state-node-edge.md`。
-
-重点关注：
-
-- 节点到底返回什么格式
-- 并发结果如何合并
-- 条件边返回值有哪些合法形态
+请继续看 `docs/02-state-node-edge.md`，那里会讲“状态到底如何在图中传递 + 新接口如何触发图执行”。

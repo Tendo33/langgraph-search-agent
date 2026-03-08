@@ -111,7 +111,7 @@ async def web_research(state: WebSearchTask, config: RunnableConfig) -> AgentSta
             "temperature": 0,
         },
     )
-
+    
     resolved_urls: Dict[str, str] = resolve_urls(
         urls_to_resolve=response.candidates[0].grounding_metadata.grounding_chunks,
         id=state["id"],

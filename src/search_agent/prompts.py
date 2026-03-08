@@ -1,35 +1,21 @@
 """Prompt templates and utility functions for automated web research agents.
 
 This module provides formatted instruction strings and helper functions for generating,
-searching, reflecting, and answering research queries in a web research workflow.
+reflecting, and answering research queries in a web research workflow.
 """
 
 from datetime import datetime
 
 
-# Get current date in a readable format
 def get_current_date() -> str:
-    """Return the current date as a formatted string in 'Month Day, Year' format.
-
-    Returns:
-        str: The current date in a human-readable format.
-    """
+    """Return the current date as a formatted string in 'Month Day, Year' format."""
     return datetime.now().strftime("%B %d, %Y")
 
 
 def get_query_writer_instructions(
     current_date: str, research_topic: str, number_queries: int
 ) -> str:
-    """Generate query writer instructions with f-string formatting.
-
-    Args:
-        current_date: Current date in readable format
-        research_topic: The research topic to generate queries for
-        number_queries: Maximum number of queries to generate
-
-    Returns:
-        str: Formatted query writer instructions
-    """
+    """Generate query writer instructions with f-string formatting."""
     return f"""Your goal is to generate sophisticated and diverse web search queries. These queries are intended for an advanced automated web research tool capable of analyzing complex results, following links, and synthesizing information.
 
 Instructions:
@@ -40,7 +26,7 @@ Instructions:
 - Don't generate multiple similar queries, 1 is enough.
 - Query should ensure that the most current information is gathered. The current date is {current_date}.
 
-Format: 
+Format:
 - Format your response as a JSON object with ALL two of these exact keys:
    - "rationale": Brief explanation of why these queries are relevant
    - "query": A list of search queries
@@ -58,40 +44,8 @@ Topic: What revenue grew more last year apple stock or the number of people buyi
 Context: {research_topic}"""
 
 
-def get_web_searcher_instructions(current_date: str, research_topic: str) -> str:
-    """Generate web searcher instructions with f-string formatting.
-
-    Args:
-        current_date: Current date in readable format
-        research_topic: The research topic to search for
-
-    Returns:
-        str: Formatted web searcher instructions
-    """
-    return f"""Conduct targeted Google Searches to gather the most recent, credible information on "{research_topic}" and synthesize it into a verifiable text artifact.
-
-Instructions:
-- Query should ensure that the most current information is gathered. The current date is {current_date}.
-- Conduct multiple, diverse searches to gather comprehensive information.
-- Consolidate key findings while meticulously tracking the source(s) for each specific piece of information.
-- The output should be a well-written summary or report based on your search findings. 
-- Only include the information found in the search results, don't make up any information.
-
-Research Topic:
-{research_topic}
-"""
-
-
 def get_reflection_instructions(research_topic: str, summaries: str) -> str:
-    """Generate reflection instructions with f-string formatting.
-
-    Args:
-        research_topic: The research topic being analyzed
-        summaries: The summaries to reflect upon
-
-    Returns:
-        str: Formatted reflection instructions
-    """
+    """Generate reflection instructions with f-string formatting."""
     return f"""You are an expert research assistant analyzing summaries about "{research_topic}".
 
 Instructions:
@@ -128,25 +82,16 @@ Summaries:
 def get_answer_instructions(
     current_date: str, research_topic: str, summaries: str
 ) -> str:
-    """Generate answer instructions with f-string formatting.
-
-    Args:
-        current_date: Current date in readable format
-        research_topic: The research topic
-        summaries: The summaries to base the answer on
-
-    Returns:
-        str: Formatted answer instructions
-    """
+    """Generate answer instructions with f-string formatting."""
     return f"""Generate a high-quality answer to the user's question based on the provided summaries.
 
 Instructions:
 - The current date is {current_date}.
-- You are the final step of a multi-step research process, don't mention that you are the final step. 
+- You are the final step of a multi-step research process, don't mention that you are the final step.
 - You have access to all the information gathered from the previous steps.
 - You have access to the user's question.
 - Generate a high-quality answer to the user's question based on the provided summaries and the user's question.
-- Include the sources you used from the Summaries in the answer correctly, use markdown format (e.g. [apnews](https://vertexaisearch.cloud.google.com/id/1-0)). THIS IS A MUST.
+- Include the sources you used from the Summaries in the answer correctly, use markdown format (e.g. [apnews](https://source.local/id/1-0)). THIS IS A MUST.
 
 User Context:
 - {research_topic}

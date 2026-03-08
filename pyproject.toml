@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "search_agent"
 version = "0.0.1"
 description = "Backend for the LangGraph agent"
@@ -11,13 +11,13 @@ requires-python = ">=3.11,<4.0"
 dependencies = [
     "langgraph>=0.2.6",
     "langchain>=0.3.19",
-    "langchain-google-genai",
+    "langchain-openai",
+    "langchain-mcp-adapters",
     "python-dotenv>=1.0.1",
     "langgraph-sdk>=0.1.57",
     "langgraph-cli",
     "langgraph-api",
     "fastapi",
-    "google-genai",
     "uvicorn[standard]",
     "requests",
     "aiohttp>=3.9.0",

@@ -1,4 +1,4 @@
-﻿from search_agent.configuration import Configuration
+from search_agent.configuration import Configuration
 
 
 def test_config_priority_request_over_env(monkeypatch):
@@ -28,4 +28,4 @@ def test_config_falls_back_to_defaults(monkeypatch):
 
     config = Configuration.from_runnable_config(None)
 
-    assert config.answer_model == "gemini-2.5-pro"
+    assert config.answer_model == "gpt-4o"

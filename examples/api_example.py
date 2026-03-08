@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Example script showing how to use the v2 research API contract."""
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ def test_research() -> None:
             "max_research_loops": 2,
             "initial_search_query_count": 2,
             "models": {
-                "query_generator": "gemini-2.5-flash",
-                "reflection": "gemini-2.5-flash",
-                "answer": "gemini-2.5-pro",
+                "query_generator": "gpt-4o-mini",
+                "reflection": "gpt-4o-mini",
+                "answer": "gpt-4o",
             },
             "return_debug": True,
         },
@@ -62,7 +62,7 @@ def main() -> None:
         test_config()
         test_research()
     except requests.exceptions.ConnectionError:
-        print("无法连接到服务，请先运行: python run_server.py")
+        print("鏃犳硶杩炴帴鍒版湇鍔★紝璇峰厛杩愯: python run_server.py")
 
 
 if __name__ == "__main__":

@@ -1,186 +1,141 @@
 """Utility functions for the LangGraph search agent."""
 
-from typing import Any, Dict, List, TypedDict
+from __future__ import annotations
 
-from google.genai.types import GenerateContentResponse
+import re
+from typing import Any, Dict, List, TypedDict
+from urllib.parse import urlparse
+
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 
 
-class CitationSegment(TypedDict):
-    """Type definition for citation segment."""
+class WebSource(TypedDict):
+    """Normalized web source item."""
 
-    label: str
-    short_url: str
-    value: str
+    title: str
+    url: str
+    snippet: str
 
 
-class Citation(TypedDict):
-    """Type definition for citation."""
-
-    start_index: int
-    end_index: int
-    segments: List[CitationSegment]
+_URL_PATTERN = re.compile(r"https?://[^\s\]\)\"'>]+")
 
 
 def get_research_topic(messages: List[AnyMessage]) -> str:
     """Get the research topic from the messages."""
-    # check if request has a history and combine the messages into a single string
     if len(messages) == 1:
-        research_topic = messages[-1].content
-    else:
-        research_topic = ""
-        for message in messages:
-            if isinstance(message, HumanMessage):
-                research_topic += f"User: {message.content}\n"
-            elif isinstance(message, AIMessage):
-                research_topic += f"Assistant: {message.content}\n"
+        return str(messages[-1].content)
+
+    research_topic = ""
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            research_topic += f"User: {message.content}\n"
+        elif isinstance(message, AIMessage):
+            research_topic += f"Assistant: {message.content}\n"
     return research_topic
 
 
-def resolve_urls(urls_to_resolve: List[Any], id: int) -> Dict[str, str]:
-    """Create a map of the vertex ai search urls (very long) to a short url with a unique id for each url.
+def resolve_urls(
+    urls_to_resolve: List[Any],
+    id: int,
+    prefix: str = "https://source.local/id/",
+) -> Dict[str, str]:
+    """Create a stable short-url map for URLs.
 
-    Ensures each original URL gets a consistent shortened form while maintaining uniqueness.
-
-    Args:
-        urls_to_resolve (List[Any]): A list of URLs to resolve.
-        id (int): A unique identifier for the current resolution context.
-
-    Returns:
-        Dict[str, str]: A dictionary mapping each original URL to its resolved short URL.
-
+    Supports URL entries as raw strings, dict payloads, or objects carrying `web.uri`.
     """
-    prefix = "https://vertexaisearch.cloud.google.com/id/"
-    urls = [site.web.uri for site in urls_to_resolve]
+    resolved_map: Dict[str, str] = {}
 
-    # Create a dictionary that maps each unique URL to its first occurrence index
-    resolved_map = {}
-    for idx, url in enumerate(urls):
-        if url not in resolved_map:
-            resolved_map[url] = f"{prefix}{id}-{idx}"
+    for index, item in enumerate(urls_to_resolve):
+        url = _extract_url(item)
+        if not url or url in resolved_map:
+            continue
+        resolved_map[url] = f"{prefix}{id}-{index}"
 
     return resolved_map
 
 
-def insert_citation_markers(text: str, citations_list: List[Citation]) -> str:
-    """Insert citation markers into a text string based on start and end indices.
+def normalize_tavily_sources(search_payload: Any, max_items: int = 8) -> List[WebSource]:
+    """Extract normalized source items from Tavily MCP payload."""
+    flattened: List[Dict[str, str]] = []
+    _walk_payload(search_payload, flattened)
 
-    Args:
-        text (str): The original text string.
-        citations_list (List[Citation]): A list of citation dictionaries, where each dictionary
-        contains 'start_index', 'end_index', and 'segments' (the citation segments).
-        Indices are assumed to be for the original text.
+    if not flattened:
+        text = str(search_payload)
+        for url in _URL_PATTERN.findall(text):
+            flattened.append({"title": _domain_label(url), "url": url, "snippet": ""})
 
-    Returns:
-        str: The text with citation markers inserted.
-    """
-    # Sort citations by end_index in descending order.
-    # If end_index is the same, secondary sort by start_index descending.
-    # This ensures that insertions at the end of the string don't affect
-    # the indices of earlier parts of the string that still need to be processed.
-    sorted_citations = sorted(
-        citations_list, key=lambda c: (c["end_index"], c["start_index"]), reverse=True
-    )
+    dedup: Dict[str, WebSource] = {}
+    for item in flattened:
+        url = item.get("url", "").strip()
+        if not url or not url.startswith(("http://", "https://")):
+            continue
+        if url in dedup:
+            continue
+        title = item.get("title", "").strip() or _domain_label(url)
+        snippet = item.get("snippet", "").strip()
+        dedup[url] = {"title": title, "url": url, "snippet": snippet}
+        if len(dedup) >= max_items:
+            break
 
-    modified_text = text
-    for citation_info in sorted_citations:
-        # These indices refer to positions in the *original* text,
-        # but since we iterate from the end, they remain valid for insertion
-        # relative to the parts of the string already processed.
-        end_idx = citation_info["end_index"]
-        marker_to_insert = ""
-        for segment in citation_info["segments"]:
-            marker_to_insert += f" [{segment['label']}]({segment['short_url']})"
-        # Insert the citation marker at the original end_idx position
-        modified_text = (
-            modified_text[:end_idx] + marker_to_insert + modified_text[end_idx:]
-        )
-
-    return modified_text
+    return list(dedup.values())
 
 
-def get_citations(
-    response: GenerateContentResponse, resolved_urls_map: Dict[str, str]
-) -> List[Citation]:
-    """Extract and formats citation information from a Gemini model's response.
+def _walk_payload(node: Any, output: List[Dict[str, str]]) -> None:
+    if isinstance(node, list):
+        for item in node:
+            _walk_payload(item, output)
+        return
 
-    This function processes the grounding metadata provided in the response to
-    construct a list of citation objects. Each citation object includes the
-    start and end indices of the text segment it refers to, and a string
-    containing formatted markdown links to the supporting web chunks.
+    if not isinstance(node, dict):
+        return
 
-    Args:
-        response (GenerateContentResponse): The response object from the Gemini model, expected to have a structure including `candidates[0].grounding_metadata`.
-        resolved_urls_map (Dict[str, str]): A mapping of chunk URIs to resolved URLs.
+    url = _extract_url(node)
+    if url:
+        title = (
+            str(node.get("title") or node.get("name") or node.get("source") or "")
+        ).strip()
+        snippet = (
+            str(
+                node.get("content")
+                or node.get("snippet")
+                or node.get("raw_content")
+                or node.get("text")
+                or ""
+            )
+        ).strip()
+        output.append({"title": title, "url": url, "snippet": snippet})
 
-    Returns:
-        List[Citation]: A list of citation dictionaries, where each dictionary represents a citation
-            and has the following keys:
-            - "start_index" (int): The starting character index of the cited
-                                segment in the original text. Defaults to 0
-                                if not specified.
-            - "end_index" (int): The character index immediately after the
-                                end of the cited segment (exclusive).
-            - "segments" (List[CitationSegment]): A list of individual citation segments.
-            Returns an empty list if no valid candidates or grounding supports
-            are found, or if essential data is missing.
-    """
-    citations: List[Citation] = []
+    for value in node.values():
+        if isinstance(value, (dict, list)):
+            _walk_payload(value, output)
 
-    # Ensure response and necessary nested structures are present
-    if not response or not response.candidates:
-        return citations
 
-    candidate = response.candidates[0]
-    if (
-        not hasattr(candidate, "grounding_metadata")
-        or not candidate.grounding_metadata
-        or not hasattr(candidate.grounding_metadata, "grounding_supports")
-    ):
-        return citations
+def _extract_url(item: Any) -> str:
+    if isinstance(item, str):
+        return item
 
-    for support in candidate.grounding_metadata.grounding_supports:
-        citation: Citation = {}
+    if isinstance(item, dict):
+        for key in ("url", "link", "uri", "source_url", "value"):
+            value = item.get(key)
+            if isinstance(value, str) and value.startswith(("http://", "https://")):
+                return value
+        return ""
 
-        # Ensure segment information is present
-        if not hasattr(support, "segment") or support.segment is None:
-            continue  # Skip this support if segment info is missing
+    web = getattr(item, "web", None)
+    if web is not None:
+        uri = getattr(web, "uri", None)
+        if isinstance(uri, str):
+            return uri
 
-        start_index = (
-            support.segment.start_index
-            if support.segment.start_index is not None
-            else 0
-        )
+    value = getattr(item, "value", None)
+    if isinstance(value, str) and value.startswith(("http://", "https://")):
+        return value
 
-        # Ensure end_index is present to form a valid segment
-        if support.segment.end_index is None:
-            continue  # Skip if end_index is missing, as it's crucial
+    return ""
 
-        # Add 1 to end_index to make it an exclusive end for slicing/range purposes
-        # (assuming the API provides an inclusive end_index)
-        citation["start_index"] = start_index
-        citation["end_index"] = support.segment.end_index
 
-        citation["segments"] = []
-        if (
-            hasattr(support, "grounding_chunk_indices")
-            and support.grounding_chunk_indices
-        ):
-            for ind in support.grounding_chunk_indices:
-                try:
-                    chunk = candidate.grounding_metadata.grounding_chunks[ind]
-                    resolved_url = resolved_urls_map.get(chunk.web.uri, None)
-                    citation["segments"].append(
-                        {
-                            "label": chunk.web.title.split(".")[:-1][0],
-                            "short_url": resolved_url,
-                            "value": chunk.web.uri,
-                        }
-                    )
-                except (IndexError, AttributeError, NameError):
-                    # Handle cases where chunk, web, uri, or resolved_map might be problematic
-                    # For simplicity, we'll just skip adding this particular segment link
-                    # In a production system, you might want to log this.
-                    pass
-        citations.append(citation)
-    return citations
+def _domain_label(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host or "source"

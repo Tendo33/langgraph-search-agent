@@ -1,4 +1,4 @@
-﻿"""Run the LangGraph research agent from the command line.
+"""Run the LangGraph research agent from the command line.
 
 Usage:
     python examples/cli_research.py "What is LangGraph?"
@@ -21,9 +21,9 @@ def main() -> None:
     parser.add_argument("question", help="Research question")
     parser.add_argument("--initial-queries", type=int, default=3)
     parser.add_argument("--max-loops", type=int, default=2)
-    parser.add_argument("--query-generator-model", default="gemini-2.5-flash")
-    parser.add_argument("--reflection-model", default="gemini-2.5-flash")
-    parser.add_argument("--answer-model", default="gemini-2.5-pro")
+    parser.add_argument("--query-generator-model", default="gpt-4o-mini")
+    parser.add_argument("--reflection-model", default="gpt-4o-mini")
+    parser.add_argument("--answer-model", default="gpt-4o")
     args = parser.parse_args()
 
     state: AgentState = {

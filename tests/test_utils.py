@@ -1,10 +1,10 @@
-﻿from types import SimpleNamespace
+from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from search_agent.utils import (
     get_research_topic,
-    insert_citation_markers,
+    normalize_tavily_sources,
     resolve_urls,
 )
 
@@ -40,21 +40,20 @@ def test_resolve_urls_deduplicates_and_uses_id_prefix():
     assert resolved["https://b.com"].endswith("7-2")
 
 
-def test_insert_citation_markers_inserts_links():
-    text = "LangGraph improves orchestration."
-    citations = [
-        {
-            "start_index": 0,
-            "end_index": len(text),
-            "segments": [
-                {
-                    "label": "example",
-                    "short_url": "https://short/1",
-                    "value": "https://long/1",
-                }
-            ],
-        }
-    ]
+def test_normalize_tavily_sources_extracts_results():
+    payload = {
+        "query": "langgraph",
+        "results": [
+            {
+                "title": "LangGraph Docs",
+                "url": "https://langchain-ai.github.io/langgraph/",
+                "content": "LangGraph is a library for building stateful agents.",
+            }
+        ],
+    }
 
-    modified = insert_citation_markers(text, citations)
-    assert "[example](https://short/1)" in modified
+    sources = normalize_tavily_sources(payload)
+
+    assert len(sources) == 1
+    assert sources[0]["title"] == "LangGraph Docs"
+    assert sources[0]["url"] == "https://langchain-ai.github.io/langgraph/"

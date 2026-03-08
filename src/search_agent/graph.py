@@ -1,4 +1,4 @@
-﻿"""LangGraph orchestration for automated web research."""
+"""LangGraph orchestration for automated web research."""
 
 from __future__ import annotations
 
@@ -6,12 +6,15 @@ import os
 from typing import Dict, List, Union
 
 from dotenv import load_dotenv
-from google.genai.types import GenerateContentResponse
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
+
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:  # pragma: no cover - validated at runtime
+    ChatOpenAI = None
 
 from search_agent.async_client import get_async_client
 from search_agent.configuration import Configuration
@@ -20,27 +23,56 @@ from search_agent.prompts import (
     get_current_date,
     get_query_writer_instructions,
     get_reflection_instructions,
-    get_web_searcher_instructions,
 )
 from search_agent.state import AgentState, SourceSegment, WebSearchTask
 from search_agent.tools_and_schemas import Reflection, SearchQueryList
 from search_agent.utils import (
-    Citation,
-    get_citations,
     get_research_topic,
-    insert_citation_markers,
+    normalize_tavily_sources,
     resolve_urls,
 )
 
 load_dotenv()
 
 
-def _require_gemini_api_key() -> str:
-    """Return Gemini API key or raise a runtime error."""
-    api_key = os.getenv("GEMINI_API_KEY")
+def _require_openai_api_key() -> str:
+    """Return OpenAI API key or raise runtime error."""
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set")
+        raise RuntimeError("OPENAI_API_KEY is not set")
     return api_key
+
+
+def _resolve_tavily_connection() -> str:
+    """Resolve Tavily MCP server URL."""
+    explicit_server_url = os.getenv("TAVILY_MCP_SERVER_URL")
+    if explicit_server_url:
+        return explicit_server_url
+
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
+    if not tavily_api_key:
+        raise RuntimeError("TAVILY_API_KEY is not set")
+
+    return f"https://mcp.tavily.com/mcp/?tavilyApiKey={tavily_api_key}"
+
+
+def _build_chat_model(*, model: str, temperature: float) -> ChatOpenAI:
+    """Build ChatOpenAI instance with OpenAI-compatible endpoint support."""
+    if ChatOpenAI is None:
+        raise RuntimeError("langchain-openai is required")
+
+    kwargs = {
+        "model": model,
+        "temperature": temperature,
+        "max_retries": 2,
+        "api_key": _require_openai_api_key(),
+    }
+
+    base_url = os.getenv("OPENAI_BASE_URL")
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    return ChatOpenAI(**kwargs)
 
 
 def _build_research_sends(queries: List[str], start_id: int = 0) -> List[Send]:
@@ -64,12 +96,9 @@ async def generate_query(state: AgentState, config: RunnableConfig) -> AgentStat
     if initial_count is None:
         initial_count = configurable.number_of_initial_queries
 
-    api_key = _require_gemini_api_key()
-    llm = ChatGoogleGenerativeAI(
+    llm = _build_chat_model(
         model=configurable.query_generator_model,
         temperature=1.0,
-        max_retries=2,
-        api_key=api_key,
     )
     structured_llm = llm.with_structured_output(SearchQueryList)
 
@@ -92,40 +121,56 @@ async def continue_to_web_research(state: AgentState) -> List[Send]:
     return _build_research_sends(queries=queries, start_id=0)
 
 
-async def web_research(state: WebSearchTask, config: RunnableConfig) -> AgentState:
-    """Run one grounded web research task."""
-    configurable = Configuration.from_runnable_config(config)
-    api_key = _require_gemini_api_key()
-    async_client = get_async_client(api_key)
+async def web_research(state: WebSearchTask, _config: RunnableConfig) -> AgentState:
+    """Run one Tavily MCP web research task."""
+    server_url = _resolve_tavily_connection()
+    async_client = get_async_client(server_url=server_url)
 
-    formatted_prompt = get_web_searcher_instructions(
-        current_date=get_current_date(),
-        research_topic=state["search_query"],
-    )
+    search_payload = await async_client.tavily_search(state["search_query"], max_results=6)
+    normalized_sources = normalize_tavily_sources(search_payload)
 
-    response: GenerateContentResponse = await async_client.generate_content(
-        model=configurable.query_generator_model,
-        contents=formatted_prompt,
-        config={
-            "tools": [{"google_search": {}}],
-            "temperature": 0,
-        },
-    )
-    
+    if not normalized_sources:
+        return {
+            "sources_gathered": [],
+            "search_query": [state["search_query"]],
+            "web_research_result": [
+                f"Query: {state['search_query']}\nNo reliable results were returned by Tavily MCP."
+            ],
+        }
+
     resolved_urls: Dict[str, str] = resolve_urls(
-        urls_to_resolve=response.candidates[0].grounding_metadata.grounding_chunks,
+        urls_to_resolve=[item["url"] for item in normalized_sources],
         id=state["id"],
+        prefix="https://source.local/id/",
     )
-    citations: List[Citation] = get_citations(response, resolved_urls)
-    modified_text: str = insert_citation_markers(response.text, citations)
-    sources_gathered: List[SourceSegment] = [
-        item for citation in citations for item in citation["segments"]
-    ]
+
+    sources_gathered: List[SourceSegment] = []
+    evidence_lines: List[str] = [f"Query: {state['search_query']}", "Findings:"]
+
+    for index, item in enumerate(normalized_sources, start=1):
+        url = item["url"]
+        short_url = resolved_urls.get(url)
+        if not short_url:
+            continue
+
+        label = item.get("title") or f"Source {index}"
+        snippet = item.get("snippet") or f"Source related to '{state['search_query']}'."
+        evidence_lines.append(f"- {snippet} [{label}]({short_url})")
+        sources_gathered.append(
+            {
+                "label": label,
+                "short_url": short_url,
+                "value": url,
+            }
+        )
+
+    if len(evidence_lines) == 2:
+        evidence_lines.append("- Tavily MCP returned sources but without usable snippets.")
 
     return {
         "sources_gathered": sources_gathered,
         "search_query": [state["search_query"]],
-        "web_research_result": [modified_text],
+        "web_research_result": ["\n".join(evidence_lines)],
     }
 
 
@@ -140,11 +185,9 @@ async def reflection(state: AgentState, config: RunnableConfig) -> AgentState:
         summaries="\n\n---\n\n".join(state.get("web_research_result", [])),
     )
 
-    llm = ChatGoogleGenerativeAI(
+    llm = _build_chat_model(
         model=reasoning_model,
         temperature=1.0,
-        max_retries=2,
-        api_key=_require_gemini_api_key(),
     )
     result: Reflection = await llm.with_structured_output(Reflection).ainvoke(
         formatted_prompt
@@ -190,11 +233,9 @@ async def finalize_answer(state: AgentState, config: RunnableConfig) -> AgentSta
         summaries="\n---\n\n".join(state.get("web_research_result", [])),
     )
 
-    llm = ChatGoogleGenerativeAI(
+    llm = _build_chat_model(
         model=reasoning_model,
         temperature=0,
-        max_retries=2,
-        api_key=_require_gemini_api_key(),
     )
     result: AIMessage = await llm.ainvoke(formatted_prompt)
 

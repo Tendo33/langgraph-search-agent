@@ -1,4 +1,4 @@
-﻿from types import SimpleNamespace
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -24,7 +24,7 @@ class FakeGraph:
 
 class ErrorGraph:
     async def ainvoke(self, initial_state, config=None):
-        raise RuntimeError("GEMINI_API_KEY is not set")
+        raise RuntimeError("OPENAI_API_KEY is not set")
 
 
 def test_research_success(monkeypatch):

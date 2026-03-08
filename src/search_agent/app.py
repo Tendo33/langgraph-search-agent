@@ -1,10 +1,11 @@
-﻿"""FastAPI application for serving the LangGraph research agent."""
+"""FastAPI application for serving the LangGraph research agent."""
 
 from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -23,10 +24,21 @@ load_dotenv()
 
 APP_VERSION = "2.0.0"
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Manage application startup/shutdown resources."""
+    try:
+        yield
+    finally:
+        await close_async_client()
+
+
 app: FastAPI = FastAPI(
     title="LangGraph Research Agent API",
     description="API for interacting with a LangGraph-powered research agent",
     version=APP_VERSION,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -49,7 +61,7 @@ class ErrorInfo(BaseModel):
 
     code: str
     message: str
-    details: Optional[Any] = None
+    details: Any | None = None
 
 
 class SourceItem(BaseModel):
@@ -73,31 +85,31 @@ class ResearchData(BaseModel):
     answer: str
     sources: List[SourceItem]
     meta: ResearchMeta
-    debug: Optional[Dict[str, Any]] = None
+    debug: Dict[str, Any] | None = None
 
 
 class ResearchResponse(BaseModel):
     """Unified research response."""
 
     ok: bool
-    data: Optional[ResearchData] = None
-    error: Optional[ErrorInfo] = None
+    data: ResearchData | None = None
+    error: ErrorInfo | None = None
 
 
 class ModelOptions(BaseModel):
     """Model override options."""
 
-    query_generator: Optional[str] = None
-    reflection: Optional[str] = None
-    answer: Optional[str] = None
+    query_generator: str | None = None
+    reflection: str | None = None
+    answer: str | None = None
 
 
 class ResearchOptions(BaseModel):
     """Research runtime options."""
 
-    max_research_loops: Optional[int] = Field(default=None, ge=1)
-    initial_search_query_count: Optional[int] = Field(default=None, ge=1)
-    models: Optional[ModelOptions] = None
+    max_research_loops: int | None = Field(default=None, ge=1)
+    initial_search_query_count: int | None = Field(default=None, ge=1)
+    models: ModelOptions | None = None
     return_debug: bool = False
 
 
@@ -114,7 +126,9 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     graph_ready: bool
-    gemini_api_key_set: bool
+    openai_api_key_set: bool
+    tavily_api_key_set: bool
+    tavily_mcp_server_url_set: bool
 
 
 def _build_error_response(
@@ -122,7 +136,7 @@ def _build_error_response(
     status_code: int,
     code: str,
     message: str,
-    details: Optional[Any] = None,
+    details: Any | None = None,
 ) -> JSONResponse:
     payload = ResearchResponse(
         ok=False,
@@ -219,7 +233,9 @@ async def health_check() -> HealthResponse:
         status="healthy" if graph_instance is not None else "degraded",
         version=APP_VERSION,
         graph_ready=graph_instance is not None,
-        gemini_api_key_set=bool(os.getenv("GEMINI_API_KEY")),
+        openai_api_key_set=bool(os.getenv("OPENAI_API_KEY")),
+        tavily_api_key_set=bool(os.getenv("TAVILY_API_KEY")),
+        tavily_mcp_server_url_set=bool(os.getenv("TAVILY_MCP_SERVER_URL")),
     )
 
 
@@ -259,18 +275,29 @@ async def research(request: ResearchRequest):
             config={"configurable": configurable},
         )
     except RuntimeError as exc:
-        if "GEMINI_API_KEY" in str(exc):
+        error_text = str(exc)
+        if "OPENAI_API_KEY" in error_text or "TAVILY_API_KEY" in error_text:
             return _build_error_response(
                 status_code=503,
                 code="missing_api_key",
-                message="GEMINI_API_KEY is required",
-                details=str(exc),
+                message="OPENAI_API_KEY and TAVILY_API_KEY are required",
+                details=error_text,
+            )
+        if (
+            "langchain-openai is required" in error_text
+            or "langchain-mcp-adapters is required" in error_text
+        ):
+            return _build_error_response(
+                status_code=503,
+                code="missing_dependency",
+                message="Required dependencies are missing",
+                details=error_text,
             )
         return _build_error_response(
             status_code=500,
             code="runtime_error",
             message="Research execution failed",
-            details=str(exc),
+            details=error_text,
         )
     except Exception as exc:  # pragma: no cover
         return _build_error_response(
@@ -305,18 +332,13 @@ async def get_config() -> Dict[str, Any]:
             "graph_ready": graph_instance is not None,
             "environment": os.getenv("ENVIRONMENT", "development"),
             "api_keys": {
-                "gemini": bool(os.getenv("GEMINI_API_KEY")),
-                "google_search": bool(os.getenv("GOOGLE_SEARCH_API_KEY")),
+                "openai": bool(os.getenv("OPENAI_API_KEY")),
+                "tavily": bool(os.getenv("TAVILY_API_KEY")),
+                "tavily_mcp_server_url": bool(os.getenv("TAVILY_MCP_SERVER_URL")),
             },
             "defaults": defaults,
         },
     }
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    """Cleanup resources when app shuts down."""
-    await close_async_client()
 
 
 if __name__ == "__main__":
